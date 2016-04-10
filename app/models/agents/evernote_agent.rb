@@ -201,7 +201,7 @@ module Agents
 
         if note
           # a note with specified title and notebook exists, so update it
-          update_note(params.merge(guid: note.guid, notebookGuid: note.notebookGuid))
+          update_note(note, params)
         else
           # create the notebook unless it already exists
           notebook = find_notebook(name: params[:notebook])
@@ -213,15 +213,18 @@ module Agents
       end
 
       def create_note(params)
-        note = Evernote::EDAM::Type::Note.new(with_wrapped_content(params))
+        note = Evernote::EDAM::Type::Note.new(with_wrapped_content(nil, params))
         en_note = createNote(note)
         find_note(en_note.guid)
       end
 
-      def update_note(params)
+      def update_note(note, params)
+
+        params = params.merge(guid: note.guid, notebookGuid: note.notebookGuid)
+
         # do not empty note properties that have not been set in `params`
         params.keys.each { |key| params.delete(key) unless params[key].present? }
-        params = with_wrapped_content(params)
+        params = with_wrapped_content(note, params)
 
         # append specified tags instead of replacing current tags
         # evernote will create any new tags
@@ -263,14 +266,18 @@ module Agents
         createNotebook(notebook)
       end
 
-      def with_wrapped_content(params)
+      def with_wrapped_content(note, params)
         params.delete(:notebook)
 
         if params[:content]
-          params[:content] =
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" \
-            "<!DOCTYPE en-note SYSTEM \"http://xml.evernote.com/pub/enml2.dtd\">" \
-            "<en-note>#{params[:content].encode(:xml => :text)}</en-note>"
+          if note
+            params[:content] = note.content.gsub "</en-note>", "#{params[:content]}</en-note>"
+          else
+            params[:content] =
+              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" \
+              "<!DOCTYPE en-note SYSTEM \"http://xml.evernote.com/pub/enml2.dtd\">" \
+              "<en-note>#{params[:content]}</en-note>"
+          end
         end
 
         params
